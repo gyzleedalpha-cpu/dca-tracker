@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DCA Tracker · Crypto</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --bg2: #111111;
+    --bg3: #1a1a1a;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #e8e6e0;
+    --text2: #888880;
+    --text3: #555550;
+    --amber: #d4920a;
+    --amber-bg: rgba(212,146,10,0.1);
+    --blue: #3b82c4;
+    --blue-bg: rgba(59,130,196,0.1);
+    --teal: #2a9d7c;
+    --teal-bg: rgba(42,157,124,0.1);
+    --red: #c4453b;
+    --red-bg: rgba(196,69,59,0.1);
+    --green: #3a9d5c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; min-height: 100vh; }
+  .mono { font-family: 'DM Mono', monospace; }
+  .app { max-width: 860px; margin: 0 auto; padding: 40px 24px 80px; }
+  .header { margin-bottom: 40px; }
+  .header h1 { font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 400; letter-spacing: -0.5px; color: var(--text); }
+  .header h1 span { color: var(--amber); }
+  .header-meta { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+  .header p { color: var(--text2); font-size: 13px; }
+  .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
+  .sync-dot.ok { background: var(--green); }
+  .sync-dot.syncing { background: var(--amber); animation: pulse 1s infinite; }
+  .sync-dot.error { background: var(--red); }
+  .sync-label { font-size: 12px; color: var(--text3); font-family: 'DM Mono', monospace; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .tabs { display: flex; gap: 4px; border-bottom: 0.5px solid var(--border2); margin-bottom: 28px; }
+  .tab { padding: 10px 18px; font-size: 13px; color: var(--text2); cursor: pointer; border-bottom: 1.5px solid transparent; margin-bottom: -0.5px; transition: all 0.15s; background: none; border-top: none; border-left: none; border-right: none; font-family: 'DM Sans', sans-serif; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--amber); border-bottom-color: var(--amber); }
+
+  .card { background: var(--bg2); border: 0.5px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 12px; }
+  .card-title { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 400; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); margin-bottom: 16px; }
+
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+  .metric { background: var(--bg3); border: 0.5px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .metric-label { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+  .metric-val { font-family: 'DM Mono', monospace; font-size: 20px; font-weight: 400; color: var(--text); }
+  .metric-sub { font-size: 11px; color: var(--text2); margin-top: 4px; }
+
+  .alloc-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 0.5px solid var(--border); }
+  .alloc-row:last-child { border-bottom: none; }
+  .alloc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .alloc-name { font-weight: 500; min-width: 120px; }
+  .alloc-pct { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text2); min-width: 38px; }
+  .alloc-bar-wrap { flex: 1; height: 4px; background: var(--bg3); border-radius: 2px; }
+  .alloc-bar { height: 4px; border-radius: 2px; transition: width 0.5s ease; }
+  .alloc-usd { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); min-width: 70px; text-align: right; }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .field label { display: block; font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .field input, .field select, .field textarea { width: 100%; background: var(--bg3); border: 0.5px solid var(--border2); border-radius: 6px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 9px 12px; outline: none; transition: border-color 0.15s; }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--amber); }
+  .field textarea { resize: vertical; min-height: 64px; }
+  .field select option { background: var(--bg2); }
+
+  .btn { padding: 10px 20px; border-radius: 6px; font-size: 13px; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all 0.15s; border: none; }
+  .btn-primary { background: var(--amber); color: #0a0a0a; font-weight: 500; }
+  .btn-primary:hover { background: #e8a20c; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: var(--text2); border: 0.5px solid var(--border2); }
+  .btn-ghost:hover { color: var(--text); background: var(--bg3); }
+  .btn-danger { background: transparent; color: var(--red); border: 0.5px solid rgba(196,69,59,0.3); }
+  .btn-danger:hover { background: var(--red-bg); }
+
+  .amount-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .amount-btn { padding: 8px 16px; border-radius: 6px; border: 0.5px solid var(--border2); background: var(--bg3); color: var(--text2); font-family: 'DM Mono', monospace; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+  .amount-btn:hover { border-color: var(--amber); color: var(--amber); }
+  .amount-btn.active { border-color: var(--amber); background: var(--amber-bg); color: var(--amber); }
+
+  .hist-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .hist-table th { text-align: left; color: var(--text3); font-family: 'DM Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; padding: 8px 10px; border-bottom: 0.5px solid var(--border); }
+  .hist-table td { padding: 11px 10px; border-bottom: 0.5px solid var(--border); vertical-align: middle; color: var(--text2); }
+  .hist-table td:first-child, .hist-table td:nth-child(2) { color: var(--text); }
+  .hist-table tr:last-child td { border-bottom: none; }
+  .hist-table tr:hover td { background: var(--bg3); }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-family: 'DM Mono', monospace; }
+  .badge-normal { background: var(--blue-bg); color: var(--blue); }
+  .badge-floja  { background: var(--border); color: var(--text3); }
+  .badge-bono   { background: var(--amber-bg); color: var(--amber); }
+
+  .progress-section { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .progress-card { background: var(--bg3); border: 0.5px solid var(--border); border-radius: 8px; padding: 16px; }
+  .progress-label { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+  .progress-bar-wrap { background: var(--bg); border-radius: 4px; height: 6px; margin-bottom: 8px; }
+  .progress-bar { height: 6px; border-radius: 4px; background: var(--amber); transition: width 0.5s; }
+  .progress-nums { display: flex; justify-content: space-between; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text2); }
+
+  .empty { text-align: center; padding: 40px 20px; color: var(--text3); font-family: 'DM Mono', monospace; font-size: 13px; }
+  .section { display: none; }
+  .section.active { display: block; }
+
+  .coin-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+  .chip { font-size: 11px; font-family: 'DM Mono', monospace; padding: 2px 7px; border-radius: 4px; background: var(--bg); border: 0.5px solid var(--border2); color: var(--text2); }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--bg2); border: 0.5px solid var(--border2); border-radius: 8px; padding: 12px 18px; font-size: 13px; font-family: 'DM Mono', monospace; color: var(--text); opacity: 0; transform: translateY(8px); transition: all 0.25s; pointer-events: none; z-index: 99; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.ok   { border-color: var(--green); color: var(--green); }
+  .toast.err  { border-color: var(--red); color: var(--red); }
+
+  .loading { display: flex; align-items: center; gap: 8px; color: var(--text3); font-family: 'DM Mono', monospace; font-size: 13px; padding: 20px 0; }
+  .spinner { width: 14px; height: 14px; border: 1.5px solid var(--border2); border-top-color: var(--amber); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .fade-in { animation: fadeIn 0.25s ease forwards; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>DCA<span>·</span>Tracker</h1>
+    <div class="header-meta">
+      <div class="sync-dot" id="sync-dot"></div>
+      <span class="sync-label" id="sync-label">Conectando con Sheets...</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('dashboard', this)">Dashboard</button>
+    <button class="tab" onclick="showTab('registrar', this)">Registrar compra</button>
+    <button class="tab" onclick="showTab('historial', this)">Historial</button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="tab-dashboard" class="section active">
+    <div class="metric-grid">
+      <div class="metric">
+        <div class="metric-label">Total invertido</div>
+        <div class="metric-val" id="m-total">—</div>
+        <div class="metric-sub">USD acumulados</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Semanas activas</div>
+        <div class="metric-val" id="m-semanas">—</div>
+        <div class="metric-sub">compras registradas</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Promedio semanal</div>
+        <div class="metric-val" id="m-avg">—</div>
+        <div class="metric-sub">USD por viernes</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Última compra</div>
+        <div class="metric-val mono" id="m-last" style="font-size:14px;padding-top:4px;">—</div>
+        <div class="metric-sub" id="m-last-tipo">—</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Acumulado por moneda</div>
+      <div id="alloc-list"><div class="loading"><div class="spinner"></div>Cargando datos de Sheets...</div></div>
+    </div>
+    <div class="progress-section">
+      <div class="progress-card">
+        <div class="progress-label">Fase actual</div>
+        <div style="font-family:'DM Mono',monospace;font-size:16px;color:var(--amber);margin-bottom:8px;" id="fase-nombre">—</div>
+        <div class="progress-bar-wrap"><div class="progress-bar" id="fase-bar" style="width:0%"></div></div>
+        <div class="progress-nums"><span id="fase-sem">0 sem</span><span>52 sem</span></div>
+      </div>
+      <div class="progress-card">
+        <div class="progress-label">Meta anual estimada</div>
+        <div style="font-family:'DM Mono',monospace;font-size:16px;color:var(--text);margin-bottom:8px;" id="meta-pct">—</div>
+        <div class="progress-bar-wrap"><div class="progress-bar" id="meta-bar" style="width:0%;background:var(--teal)"></div></div>
+        <div class="progress-nums"><span id="meta-actual">$0</span><span>$26,000</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REGISTRAR -->
+  <div id="tab-registrar" class="section">
+    <div class="card">
+      <div class="card-title">Nueva compra — Viernes</div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Fecha</label>
+          <input type="date" id="f-fecha">
+        </div>
+        <div class="field">
+          <label>Tipo de semana</label>
+          <select id="f-tipo">
+            <option value="normal">Normal</option>
+            <option value="floja">Floja</option>
+            <option value="bono">Bono / Extra</option>
+          </select>
+        </div>
+      </div>
+      <div class="field" style="margin-bottom:16px;">
+        <label>Monto total (USD)</label>
+        <div class="amount-btns">
+          <button class="amount-btn active" onclick="selMonto(100,this)">$100</button>
+          <button class="amount-btn" onclick="selMonto(250,this)">$250</button>
+          <button class="amount-btn" onclick="selMonto(500,this)">$500</button>
+          <button class="amount-btn" onclick="selMonto(1000,this)">$1,000</button>
+        </div>
+        <input type="number" id="f-monto" value="100" min="1" placeholder="O escribe el monto" oninput="updateDesglose()" style="max-width:200px;">
+      </div>
+      <div class="card" style="background:var(--bg3);margin-bottom:16px;">
+        <div class="card-title">Desglose automático</div>
+        <div id="desglose-list"></div>
+      </div>
+      <div class="field" style="margin-bottom:16px;">
+        <label>Nota (opcional)</label>
+        <textarea id="f-nota" placeholder="ej. Mercado en baja, compré igual. BTC en $62k."></textarea>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-primary" id="btn-guardar" onclick="guardarCompra()">Registrar compra</button>
+        <button class="btn btn-ghost" onclick="resetForm()">Limpiar</button>
+        <span id="saving-indicator" style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;display:none;">Guardando en Sheets...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORIAL -->
+  <div id="tab-historial" class="section">
+    <div class="card">
+      <div class="card-title">Todas las compras</div>
+      <div id="hist-container"><div class="loading"><div class="spinner"></div>Cargando historial...</div></div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;">
+      <button class="btn btn-ghost" onclick="exportarCSV()">Exportar CSV</button>
+      <button class="btn btn-ghost" onclick="cargarDatos()">Recargar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbwPsCw1rwjBJQuKa0xr-HZB82-b9uzkb0fP0NrRGv0cNhwhMAoTif-s8Q39Bbyu4iUA/exec';
+
+const COINS = [
+  { key:'hl',   name:'Hyperliquid', pct:0.35, color:'#d4920a' },
+  { key:'btc',  name:'Bitcoin',     pct:0.25, color:'#3b82c4' },
+  { key:'sol',  name:'Solana',      pct:0.20, color:'#2a9d7c' },
+  { key:'astr', name:'Astar',       pct:0.10, color:'#888880' },
+  { key:'eth',  name:'Ethereum',    pct:0.10, color:'#6b7cc4' },
+];
+
+let compras = [];
+
+// ---- SYNC STATUS ----
+function setSyncStatus(state, msg) {
+  const dot = document.getElementById('sync-dot');
+  const lbl = document.getElementById('sync-label');
+  dot.className = 'sync-dot ' + state;
+  lbl.textContent = msg;
+}
+
+// ---- TOAST ----
+function toast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+// ---- LOAD DATA FROM SHEETS ----
+async function cargarDatos() {
+  setSyncStatus('syncing', 'Sincronizando...');
+  try {
+    const res = await fetch(API);
+    const raw = await res.json();
+    compras = raw.map(r => ({
+      id:       r.id,
+      fecha:    r.fecha,
+      monto:    parseFloat(r.monto) || 0,
+      tipo:     r.tipo,
+      nota:     r.nota || '',
+      desglose: { hl: parseFloat(r.hl)||0, btc: parseFloat(r.btc)||0, sol: parseFloat(r.sol)||0, astr: parseFloat(r.astr)||0, eth: parseFloat(r.eth)||0 }
+    })).sort((a,b) => b.id - a.id);
+    setSyncStatus('ok', 'Sincronizado con Google Sheets');
+    renderDashboard();
+    renderHistorial();
+  } catch(e) {
+    setSyncStatus('error', 'Error al conectar con Sheets');
+    toast('No se pudo conectar con Sheets', 'err');
+  }
+}
+
+// ---- TABS ----
+function showTab(t, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+t).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(t==='historial') renderHistorial();
+}
+
+// ---- FORMAT ----
+function fmt(n)      { return '$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtShort(n) { return '$'+Math.round(n).toLocaleString('en-US'); }
+
+// ---- REGISTRAR ----
+window.addEventListener('DOMContentLoaded', () => {
+  const hoy = new Date();
+  document.getElementById('f-fecha').value = hoy.toISOString().split('T')[0];
+  updateDesglose();
+  cargarDatos();
+});
+
+function selMonto(m, btn) {
+  document.getElementById('f-monto').value = m;
+  document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  updateDesglose();
+}
+
+function updateDesglose() {
+  const m = parseFloat(document.getElementById('f-monto').value) || 0;
+  document.getElementById('desglose-list').innerHTML = COINS.map(c => `
+    <div class="alloc-row">
+      <div class="alloc-dot" style="background:${c.color}"></div>
+      <div class="alloc-name">${c.name}</div>
+      <div class="alloc-pct">${Math.round(c.pct*100)}%</div>
+      <div class="alloc-bar-wrap"><div class="alloc-bar" style="width:${c.pct*100}%;background:${c.color}"></div></div>
+      <div class="alloc-usd">${fmt(m*c.pct)}</div>
+    </div>
+  `).join('');
+}
+
+async function guardarCompra() {
+  const fecha = document.getElementById('f-fecha').value;
+  const tipo  = document.getElementById('f-tipo').value;
+  const monto = parseFloat(document.getElementById('f-monto').value) || 0;
+  const nota  = document.getElementById('f-nota').value.trim();
+  if(!fecha || monto<=0) { toast('Completa fecha y monto', 'err'); return; }
+
+  const btn = document.getElementById('btn-guardar');
+  const ind = document.getElementById('saving-indicator');
+  btn.disabled = true;
+  ind.style.display = 'inline';
+  setSyncStatus('syncing', 'Guardando en Sheets...');
+
+  const payload = {
+    id: Date.now(),
+    fecha, tipo, monto, nota,
+    hl:   +(monto*0.35).toFixed(2),
+    btc:  +(monto*0.25).toFixed(2),
+    sol:  +(monto*0.20).toFixed(2),
+    astr: +(monto*0.10).toFixed(2),
+    eth:  +(monto*0.10).toFixed(2),
+  };
+
+  try {
+    await fetch(API, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    toast('Compra guardada en Sheets ✓');
+    resetForm();
+    setTimeout(() => cargarDatos(), 1500);
+    showTab('historial', document.querySelectorAll('.tab')[2]);
+  } catch(e) {
+    toast('Error al guardar', 'err');
+    setSyncStatus('error', 'Error al guardar');
+  } finally {
+    btn.disabled = false;
+    ind.style.display = 'none';
+  }
+}
+
+function resetForm() {
+  document.getElementById('f-monto').value = 100;
+  document.getElementById('f-nota').value = '';
+  document.getElementById('f-tipo').value = 'normal';
+  document.querySelectorAll('.amount-btn').forEach((b,i) => b.classList.toggle('active', i===0));
+  updateDesglose();
+}
+
+// ---- DASHBOARD ----
+function renderDashboard() {
+  const total = compras.reduce((a,c) => a+c.monto, 0);
+  const sem   = compras.length;
+  const avg   = sem ? total/sem : 0;
+  document.getElementById('m-total').textContent   = fmtShort(total);
+  document.getElementById('m-semanas').textContent = sem;
+  document.getElementById('m-avg').textContent     = fmtShort(avg);
+  if(sem) {
+    document.getElementById('m-last').textContent      = compras[0].fecha;
+    document.getElementById('m-last-tipo').textContent = compras[0].tipo;
+  }
+  const acum = { hl:0, btc:0, sol:0, astr:0, eth:0 };
+  compras.forEach(c => COINS.forEach(coin => acum[coin.key] += c.desglose[coin.key]||0));
+  document.getElementById('alloc-list').innerHTML = COINS.map(c => `
+    <div class="alloc-row fade-in">
+      <div class="alloc-dot" style="background:${c.color}"></div>
+      <div class="alloc-name">${c.name}</div>
+      <div class="alloc-pct">${Math.round(c.pct*100)}%</div>
+      <div class="alloc-bar-wrap"><div class="alloc-bar" style="width:${total?c.pct*100:0}%;background:${c.color}"></div></div>
+      <div class="alloc-usd">${fmt(acum[c.key])}</div>
+    </div>
+  `).join('');
+  const fasePct = Math.min(sem/52*100, 100);
+  document.getElementById('fase-bar').style.width = fasePct+'%';
+  document.getElementById('fase-sem').textContent = sem+' sem';
+  document.getElementById('fase-nombre').textContent = sem<52?'Acumulación':sem<104?'Consolidación':'Decisión';
+  const metaPct = Math.min(total/26000*100, 100);
+  document.getElementById('meta-bar').style.width = metaPct+'%';
+  document.getElementById('meta-pct').textContent = Math.round(metaPct)+'%';
+  document.getElementById('meta-actual').textContent = fmtShort(total);
+}
+
+// ---- HISTORIAL ----
+function renderHistorial() {
+  const c = document.getElementById('hist-container');
+  if(!compras.length) {
+    c.innerHTML = '<div class="empty">Sin registros aún.<br>Registra tu primera compra del viernes.</div>';
+    return;
+  }
+  c.innerHTML = `
+    <table class="hist-table">
+      <thead><tr>
+        <th>Fecha</th><th>Monto</th><th>Tipo</th><th>Desglose</th><th>Nota</th>
+      </tr></thead>
+      <tbody>
+        ${compras.map(cp => `
+          <tr>
+            <td class="mono">${cp.fecha}</td>
+            <td class="mono">${fmt(cp.monto)}</td>
+            <td><span class="badge badge-${cp.tipo}">${cp.tipo}</span></td>
+            <td><div class="coin-chips">${COINS.map(coin=>`<span class="chip">${coin.name.slice(0,4)} ${fmt(cp.desglose[coin.key]||0)}</span>`).join('')}</div></td>
+            <td style="max-width:160px;font-size:12px;color:var(--text3)">${cp.nota||'—'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ---- EXPORT CSV ----
+function exportarCSV() {
+  if(!compras.length) { toast('No hay datos para exportar', 'err'); return; }
+  const rows = [['Fecha','Monto','Tipo','HYPE','BTC','SOL','ASTR','ETH','Nota']];
+  compras.forEach(c => rows.push([c.fecha,c.monto,c.tipo,c.desglose.hl,c.desglose.btc,c.desglose.sol,c.desglose.astr,c.desglose.eth,c.nota||'']));
+  const csv = rows.map(r=>r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download = 'dca_crypto.csv';
+  a.click();
+  toast('CSV descargado ✓');
+}
+</script>
+</body>
+</html>

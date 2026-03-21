@@ -1039,6 +1039,10 @@ function renderDashboard(){
     const avgE=calcAvgEntry(c.key);
     const units=avgE>0?acum[c.key]/avgE:0;
     const unitsLabel=units>0?(units<0.001?units.toFixed(6):units<1?units.toFixed(4):units.toFixed(4)):'—';
+    const pa=prices[c.key]?.usd||0;
+    const valorActual=units>0&&pa>0?units*pa:acum[c.key];
+    const pnlCoin=valorActual-acum[c.key];
+    const pnlColor=pnlCoin>=0?'var(--green)':'var(--red)';
     return `
     <div class="alloc-row fade-in">
       <div class="alloc-dot" style="background:${c.color};box-shadow:0 0 6px ${c.color}44;"></div>
@@ -1046,7 +1050,10 @@ function renderDashboard(){
       <div class="alloc-pct">${Math.round(c.pct*100)}%</div>
       <div class="alloc-bar-wrap"><div class="alloc-bar" style="width:${total?c.pct*100:0}%;background:${c.color};"></div></div>
       <div style="font-family:DM Mono,monospace;font-size:11px;color:var(--text3);min-width:90px;text-align:right;">${unitsLabel} ${c.key.toUpperCase()}</div>
-      <div class="alloc-usd">${fmt(acum[c.key])}</div>
+      <div style="text-align:right;min-width:110px;">
+        <div style="font-family:DM Mono,monospace;font-size:13px;color:var(--text);">${fmt(valorActual)}</div>
+        <div style="font-family:DM Mono,monospace;font-size:11px;color:${pnlColor};">${pnlCoin>=0?'+':''}${fmt(pnlCoin)}</div>
+      </div>
     </div>
   `}).join('');
   renderChartAcum();

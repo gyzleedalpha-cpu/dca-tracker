@@ -966,8 +966,9 @@ function calcAvgEntry(key){
   return units>0?usd/units:0;
 }
 function calcSkipped(){
-  if(compras.length<2)return 0;
-  const fechas=compras.map(c=>new Date(c.fecha)).sort((a,b)=>a-b);
+  const uniqueDates=[...new Set(compras.map(c=>c.fecha))].sort();
+  if(uniqueDates.length<2)return 0;
+  const fechas=uniqueDates.map(d=>new Date(d)).sort((a,b)=>a-b);
   let s=0;
   for(let i=1;i<fechas.length;i++){const d=(fechas[i]-fechas[i-1])/(604800000);if(d>1.5){const gap=Math.floor(d)-1;const pausasSemana=pausas.filter(p=>{const pd=new Date(p.fecha);return pd>=fechas[i-1]&&pd<=fechas[i];}).length;s+=Math.max(0,gap-pausasSemana);}}
   const ultima=new Date(Math.max(...fechas));
@@ -977,10 +978,11 @@ function calcSkipped(){
 }
 function calcStreak(){
   if(!compras.length)return 0;
-  const sorted=[...compras].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const uniqueDates=[...new Set(compras.map(c=>c.fecha))].sort().reverse();
+  if(uniqueDates.length===0)return 0;
   let streak=1;
-  for(let i=1;i<sorted.length;i++){
-    const d=(new Date(sorted[i-1].fecha)-new Date(sorted[i].fecha))/604800000;
+  for(let i=1;i<uniqueDates.length;i++){
+    const d=(new Date(uniqueDates[i-1])-new Date(uniqueDates[i]))/604800000;
     if(d<1.5&&d>0.5)streak++;else break;
   }
   return streak;
@@ -999,8 +1001,9 @@ function calcValorActual(){
 // DASHBOARD
 function renderDashboard(){
   const total=compras.reduce((a,c)=>a+c.monto,0);
-  const sem=compras.length;
-  const avg=sem?total/sem:0;
+  const sem=[...new Set(compras.map(c=>c.fecha))].length;
+  const semCount=[...new Set(compras.map(c=>c.fecha))].length;
+  const avg=semCount?total/semCount:0;
   const valor=calcValorActual();
   const pnl=valor-total;
   const pnlPct=total>0?pnl/total*100:0;
@@ -1052,8 +1055,10 @@ function renderDashboard(){
 function renderChartAcum(){
   if(!compras.length)return;
   const sorted=[...compras].sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+  const byDate={};
+  sorted.forEach(c=>{byDate[c.fecha]=(byDate[c.fecha]||0)+c.monto;});
   let running=0;const labels=[],data=[];
-  sorted.forEach(c=>{running+=c.monto;labels.push(c.fecha);data.push(+running.toFixed(2));});
+  Object.entries(byDate).forEach(([fecha,monto])=>{running+=monto;labels.push(fecha);data.push(+running.toFixed(2));});
   const ctx=document.getElementById('chart-acum').getContext('2d');
   if(chartAcum)chartAcum.destroy();
   chartAcum=new Chart(ctx,{type:'line',data:{labels,datasets:[{label:'Total',data,borderColor:'#c084fc',backgroundColor:'rgba(192,132,252,0.08)',fill:true,tension:0.3,pointRadius:3,pointBackgroundColor:'#c084fc',borderWidth:1.5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'rgba(255,255,255,0.28)',font:{size:11},maxTicksLimit:8},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'rgba(255,255,255,0.28)',font:{size:11},callback:v=>'$'+Math.round(v)},grid:{color:'rgba(255,255,255,0.04)'}}}}});

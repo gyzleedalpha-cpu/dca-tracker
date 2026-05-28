@@ -615,6 +615,7 @@ body {
 .badge-normal { background: var(--blue-bg); color: var(--blue); }
 .badge-floja { background: var(--surface3); color: var(--text3); }
 .badge-bono { background: var(--amber-bg); color: var(--amber); }
+.badge-venta { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
 
 /* ========= PROGRESS ========= */
 .prog-wrap { background: var(--surface3); border-radius: 4px; height: 4px; margin: 8px 0; }
@@ -1261,6 +1262,7 @@ body {
             <div class="stat-card-value" id="m-pnl">—</div>
             <span class="stat-card-change" id="m-pnl-pct">—</span>
           </div>
+          <div id="realized-pnl-row" style="margin-top:4px;"></div>
         </div>
         <div class="stat-card">
           <div class="stat-card-label">No. de Inversiones</div>
@@ -1322,7 +1324,11 @@ body {
     <!-- ========= REGISTRAR ========= -->
     <div id="tab-registrar" class="section">
       <div class="card">
-        <div class="card-title">Nueva compra · Viernes</div>
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+          <button class="amount-btn active" id="accion-compra" onclick="setAccion('compra')">Compra</button>
+          <button class="amount-btn" id="accion-venta" onclick="setAccion('venta')" style="border-color:var(--red-border);"><span style="color:var(--red);">Venta</span></button>
+        </div>
+        <div class="card-title" id="form-title">Nueva compra · Viernes</div>
         <div class="form-grid">
           <div class="field">
             <label>Fecha</label>
@@ -1368,11 +1374,11 @@ body {
           </div>
         </div>
         <div style="margin-bottom:14px;">
-          <div class="card-title" style="margin-bottom:8px;">Precio de compra · Auto-rellenado desde CoinGecko</div>
+          <div class="card-title" style="margin-bottom:8px;" id="precio-label">Precio de compra · Auto-rellenado desde CoinGecko</div>
           <div class="precio-grid" id="precio-inputs"></div>
-          <p class="field-hint">Los precios se rellenan automaticamente. Puedes editarlos si compraste a un precio diferente.</p>
+          <p class="field-hint" id="precio-hint">Los precios se rellenan automaticamente. Puedes editarlos si compraste a un precio diferente.</p>
         </div>
-        <div style="margin-bottom:14px;">
+        <div style="margin-bottom:14px;" id="emotion-section">
           <div class="card-title" style="margin-bottom:8px;">Como te sientes hoy con el mercado?</div>
           <div class="emotion-btns" id="emotion-btns">
             <button class="emotion-btn" onclick="selEmocion('optimista',this)">Optimista</button>
@@ -1398,8 +1404,8 @@ body {
     <!-- ========= HISTORIAL ========= -->
     <div id="tab-historial" class="section">
       <div class="card">
-        <div class="card-title">Todas las compras</div>
-        <input class="search-input" id="hist-search" placeholder="Buscar por fecha, tipo, emocion, nota..." oninput="histSearch=this.value;histPage=1;renderHistorialMejorado()">
+        <div class="card-title">Todas las transacciones</div>
+        <input class="search-input" id="hist-search" placeholder="Buscar por fecha, tipo, emocion, nota, venta..." oninput="histSearch=this.value;histPage=1;renderHistorialMejorado()">
         <div id="hist-container"><div class="loading"><div class="spinner"></div>Cargando...</div></div>
       </div>
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
@@ -1880,6 +1886,43 @@ const COINS = [
 
 let compras=[], prices={}, fxRate=null, currency='usd';
 let selectedEmotion='';
+let currentAccion='compra';
+
+function txSign(c){ return c.accion==='venta'?-1:1; }
+function soloCompras(){ return compras.filter(c=>c.accion!=='venta'); }
+function soloVentas(){ return compras.filter(c=>c.accion==='venta'); }
+function calcTotalBruto(){ return soloCompras().reduce((a,c)=>a+c.monto,0); }
+function calcTotalVendido(){ return soloVentas().reduce((a,c)=>a+c.monto,0); }
+function calcNetInvertido(){ return compras.reduce((a,c)=>a+c.monto*txSign(c),0); }
+function calcNetCoin(key){ return compras.reduce((a,c)=>a+(c.desglose[key]||0)*txSign(c),0); }
+function calcNetUnits(key){
+  let u=0;
+  compras.forEach(c=>{const p=c.precios[key],m=c.desglose[key]||0;if(p>0&&m>0)u+=(m/p)*txSign(c);});
+  return Math.max(0,u);
+}
+function calcRealizedPnL(){
+  let total=0;
+  soloVentas().forEach(c=>{
+    COINS.forEach(coin=>{
+      const sellUsd=c.desglose[coin.key]||0;const sellPrice=c.precios[coin.key]||0;
+      if(sellUsd>0&&sellPrice>0){const unitsSold=sellUsd/sellPrice;const avg=calcAvgEntry(coin.key);total+=unitsSold*(sellPrice-avg);}
+    });
+  });
+  return total;
+}
+
+function setAccion(a){
+  currentAccion=a;
+  document.getElementById('accion-compra').classList.toggle('active',a==='compra');
+  document.getElementById('accion-venta').classList.toggle('active',a==='venta');
+  document.getElementById('form-title').textContent=a==='venta'?'Registrar venta de activos':'Nueva compra · Viernes';
+  document.getElementById('precio-label').textContent=a==='venta'?'Precio de venta · Auto-rellenado desde CoinGecko':'Precio de compra · Auto-rellenado desde CoinGecko';
+  document.getElementById('precio-hint').textContent=a==='venta'?'Los precios se rellenan automaticamente. Puedes editarlos si vendiste a un precio diferente.':'Los precios se rellenan automaticamente. Puedes editarlos si compraste a un precio diferente.';
+  document.getElementById('btn-guardar').textContent=a==='venta'?'Registrar venta':'Registrar compra';
+  document.getElementById('emotion-section').style.display=a==='venta'?'none':'';
+  if(a==='venta'){setMode('libre',document.getElementById('mode-libre'));document.getElementById('mode-auto').style.display='none';}
+  else{document.getElementById('mode-auto').style.display='';}
+}
 let goals=JSON.parse(localStorage.getItem('dca_goals')||'{}');
 let chartAcum=null, chartDist=null;
 
@@ -1938,6 +1981,7 @@ async function cargarDatos(){
     compras=raw.map(r=>({
       id:r.id,fecha:r.fecha,monto:parseFloat(r.monto)||0,tipo:r.tipo,nota:r.nota||'',
       emocion:r.emocion||'',
+      accion:r.accion||'compra',
       precios:{hl:parseFloat(r.p_hl)||0,btc:parseFloat(r.p_btc)||0,sol:parseFloat(r.p_sol)||0,astr:parseFloat(r.p_astr)||0,eth:parseFloat(r.p_eth)||0},
       desglose:{hl:parseFloat(r.hl)||0,btc:parseFloat(r.btc)||0,sol:parseFloat(r.sol)||0,astr:parseFloat(r.astr)||0,eth:parseFloat(r.eth)||0}
     })).sort((a,b)=>b.id-a.id);
@@ -1972,11 +2016,11 @@ function renderAll(){
 // CALC HELPERS
 function calcAvgEntry(key){
   let usd=0,units=0;
-  compras.forEach(c=>{const p=c.precios[key],m=c.desglose[key]||0;if(p>0&&m>0){units+=m/p;usd+=m;}});
+  compras.forEach(c=>{if(c.accion==='venta')return;const p=c.precios[key],m=c.desglose[key]||0;if(p>0&&m>0){units+=m/p;usd+=m;}});
   return units>0?usd/units:0;
 }
 function calcSkipped(){
-  const uniqueDates=[...new Set(compras.map(c=>c.fecha))].sort();
+  const uniqueDates=[...new Set(soloCompras().map(c=>c.fecha))].sort();
   if(uniqueDates.length<2)return 0;
   const fechas=uniqueDates.map(d=>new Date(d)).sort((a,b)=>a-b);
   let s=0;
@@ -1987,8 +2031,8 @@ function calcSkipped(){
   return s;
 }
 function calcStreak(){
-  if(!compras.length)return 0;
-  const uniqueDates=[...new Set(compras.map(c=>c.fecha))].sort().reverse();
+  if(!soloCompras().length)return 0;
+  const uniqueDates=[...new Set(soloCompras().map(c=>c.fecha))].sort().reverse();
   if(uniqueDates.length===0)return 0;
   let streak=1;
   for(let i=1;i<uniqueDates.length;i++){
@@ -2000,23 +2044,28 @@ function calcStreak(){
 function calcValorActual(){
   let total=0;
   COINS.forEach(c=>{
-    const inv=compras.reduce((a,cp)=>a+(cp.desglose[c.key]||0),0);
-    const avg=calcAvgEntry(c.key);
+    const units=calcNetUnits(c.key);
     const p=prices[c.key]?.usd||0;
-    total+=avg>0&&p>0?(inv/avg)*p:inv;
+    const netInv=calcNetCoin(c.key);
+    total+=units>0&&p>0?units*p:netInv;
   });
   return total;
 }
 
 // DASHBOARD
 function renderDashboard(){
-  const total=compras.reduce((a,c)=>a+c.monto,0);
-  const sem=[...new Set(compras.map(c=>c.fecha))].length;
-  const semCount=[...new Set(compras.map(c=>c.fecha))].length;
-  const avg=semCount?total/semCount:0;
+  const totalBruto=calcTotalBruto();
+  const totalNeto=calcNetInvertido();
+  const buys=soloCompras();
+  const sem=[...new Set(buys.map(c=>c.fecha))].length;
+  const semCount=sem;
+  const avg=semCount?totalBruto/semCount:0;
   const valor=calcValorActual();
-  const pnl=valor-total;
-  const pnlPct=total>0?pnl/total*100:0;
+  const realized=calcRealizedPnL();
+  const unrealized=valor-totalNeto;
+  const pnl=unrealized+realized;
+  const pnlPct=totalBruto>0?pnl/totalBruto*100:0;
+  const total=totalNeto;
   const streak=calcStreak();
   const skipped=calcSkipped();
 
@@ -2045,17 +2094,27 @@ function renderDashboard(){
 
   if(new Date().getDay()===5)document.getElementById('friday-banner').style.display='flex';
 
+  const ventas=soloVentas();
+  if(ventas.length>0){
+    const vendidoTotal=calcTotalVendido();
+    document.getElementById('m-pnl').insertAdjacentHTML||0;
+    const rpEl=document.getElementById('realized-pnl-row');
+    if(rpEl)rpEl.innerHTML=`<span style="font-size:12px;color:var(--text3);">Realizado: <span style="color:${realized>=0?'var(--green)':'var(--red)'};">${(realized>=0?'+':'')+fmtS(realized)}</span> · Vendido: ${fmtS(vendidoTotal)}</span>`;
+  } else {
+    const rpEl=document.getElementById('realized-pnl-row');if(rpEl)rpEl.innerHTML='';
+  }
+
   const acum={hl:0,btc:0,sol:0,astr:0,eth:0};
-  compras.forEach(c=>COINS.forEach(coin=>acum[coin.key]+=(c.desglose[coin.key]||0)));
+  COINS.forEach(coin=>{acum[coin.key]=calcNetCoin(coin.key);});
+  const totalForPct=COINS.reduce((a,c)=>a+Math.max(0,acum[c.key]),0);
   document.getElementById('alloc-list').innerHTML=COINS.map(c=>{
-    const avgE=calcAvgEntry(c.key);
-    const units=avgE>0?acum[c.key]/avgE:0;
+    const units=calcNetUnits(c.key);
     const unitsLabel=units>0?(units<0.001?units.toFixed(6):units<1?units.toFixed(4):units.toFixed(4)):'—';
     const pa=prices[c.key]?.usd||0;
-    const valorActual=units>0&&pa>0?units*pa:acum[c.key];
-    const pnlCoin=valorActual-acum[c.key];
+    const valorActual=units>0&&pa>0?units*pa:Math.max(0,acum[c.key]);
+    const pnlCoin=valorActual-Math.max(0,acum[c.key]);
     const pnlColor=pnlCoin>=0?'var(--green)':'var(--red)';
-    const pctOfTotal=total>0?(acum[c.key]/total*100):0;
+    const pctOfTotal=totalForPct>0?(Math.max(0,acum[c.key])/totalForPct*100):0;
     return `
     <div class="alloc-row fade-in">
       <div class="alloc-dot" style="background:${c.color};"></div>
@@ -2075,7 +2134,7 @@ function renderChartAcum(){
   if(!compras.length)return;
   const sorted=[...compras].sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
   const byDate={};
-  sorted.forEach(c=>{byDate[c.fecha]=(byDate[c.fecha]||0)+c.monto;});
+  sorted.forEach(c=>{byDate[c.fecha]=(byDate[c.fecha]||0)+c.monto*txSign(c);});
   let running=0;const labels=[],data=[];
   Object.entries(byDate).forEach(([fecha,monto])=>{running+=monto;labels.push(fecha);data.push(+running.toFixed(2));});
   const ctx=document.getElementById('chart-acum').getContext('2d');
@@ -2129,15 +2188,25 @@ async function guardarCompra(){
   const monto=parseFloat(document.getElementById('f-monto').value)||0;
   const nota=document.getElementById('f-nota').value.trim();
   if(!fecha||monto<=0){toast('Completa fecha y monto','err');return;}
-  const btn=document.getElementById('btn-guardar');
-  btn.disabled=true;document.getElementById('saving-ind').style.display='inline';
-  setSS('syncing','Guardando...');
+  const esVenta=currentAccion==='venta';
   const libreMode = currentMode === 'libre';
   const getVal = (key) => libreMode
     ? (parseFloat(document.getElementById('libre-'+key)?.value)||0)
     : +(monto*getCoinPct(key)).toFixed(2);
+  if(esVenta){
+    let valid=true;
+    COINS.forEach(c=>{
+      const sellUsd=getVal(c.key);const sellPrice=parseFloat(document.getElementById('p-'+c.key).value)||0;
+      if(sellUsd>0&&sellPrice>0){const unitsSell=sellUsd/sellPrice;const held=calcNetUnits(c.key);if(unitsSell>held*1.001){toast(`No tienes suficiente ${c.name} (tienes ${held.toFixed(4)} unidades)`,'err');valid=false;}}
+    });
+    if(!valid)return;
+  }
+  const btn=document.getElementById('btn-guardar');
+  btn.disabled=true;document.getElementById('saving-ind').style.display='inline';
+  setSS('syncing','Guardando...');
   const payload={
-    id:Date.now(),fecha,tipo,monto,nota,emocion:selectedEmotion,
+    id:Date.now(),fecha,tipo,monto,nota,emocion:esVenta?'':selectedEmotion,
+    accion:currentAccion,
     hl:getVal('hl'),btc:getVal('btc'),
     sol:getVal('sol'),astr:getVal('astr'),eth:getVal('eth'),
     p_hl:parseFloat(document.getElementById('p-hl').value)||0,
@@ -2148,7 +2217,7 @@ async function guardarCompra(){
   };
   try {
     await fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    toast('Compra guardada');resetForm();
+    toast(esVenta?'Venta registrada':'Compra guardada');resetForm();
     setTimeout(()=>cargarDatos(),1800);
     showTabDirect('historial');
   } catch(e){toast('Error al guardar','err');setSS('error','Error');}
@@ -2159,9 +2228,9 @@ function resetForm(){
   document.getElementById('f-monto').value=100;
   document.getElementById('f-nota').value='';
   document.getElementById('f-tipo').value='normal';
-  document.querySelectorAll('.amount-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
   document.querySelectorAll('.emotion-btn').forEach(b=>b.classList.remove('active'));
   selectedEmotion='';
+  if(currentAccion==='venta')setAccion('compra');
   COINS.forEach(c=>{const el=document.getElementById('p-'+c.key);if(el)el.value=prices[c.key]?.usd||'';});
   updateDesglose();
 }
@@ -2178,8 +2247,8 @@ async function eliminarCompra(id){
 
 function exportarCSV(){
   if(!compras.length){toast('Sin datos','err');return;}
-  const rows=[['Fecha','Monto','Tipo','Emocion','HYPE','BTC','SOL','ASTR','ETH','P_HYPE','P_BTC','P_SOL','P_ASTR','P_ETH','Nota']];
-  compras.forEach(c=>rows.push([c.fecha,c.monto,c.tipo,c.emocion,c.desglose.hl,c.desglose.btc,c.desglose.sol,c.desglose.astr,c.desglose.eth,c.precios.hl,c.precios.btc,c.precios.sol,c.precios.astr,c.precios.eth,c.nota||'']));
+  const rows=[['Fecha','Accion','Monto','Tipo','Emocion','HYPE','BTC','SOL','ASTR','ETH','P_HYPE','P_BTC','P_SOL','P_ASTR','P_ETH','Nota']];
+  compras.forEach(c=>rows.push([c.fecha,c.accion||'compra',c.monto,c.tipo,c.emocion,c.desglose.hl,c.desglose.btc,c.desglose.sol,c.desglose.astr,c.desglose.eth,c.precios.hl,c.precios.btc,c.precios.sol,c.precios.astr,c.precios.eth,c.nota||'']));
   const a=document.createElement('a');
   a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(rows.map(r=>r.join(',')).join('\n'));
   a.download='dca_crypto.csv';a.click();toast('CSV descargado');
@@ -2193,18 +2262,17 @@ function renderPortafolio(){
   if(!hasPrices)return;
   let totalInv=0,totalVal=0;
   const rows=COINS.map(c=>{
-    const inv=compras.reduce((a,cp)=>a+(cp.desglose[c.key]||0),0);
+    const inv=calcNetCoin(c.key);
     const avg=calcAvgEntry(c.key);
     const pa=prices[c.key]?.usd||0;
-    const units=avg>0?inv/avg:0;
-    const val=units*pa||inv;
-    const pnl=val-inv;
+    const units=calcNetUnits(c.key);
+    const val=units>0&&pa>0?units*pa:Math.max(0,inv);
+    const pnl=val-Math.max(0,inv);
     const pnlPct=inv>0?pnl/inv*100:0;
-    totalInv+=inv;totalVal+=val;
-    return {c,inv,avg,pa,val,pnl,pnlPct};
+    totalInv+=Math.max(0,inv);totalVal+=val;
+    return {c,inv:Math.max(0,inv),avg,pa,units,val,pnl,pnlPct};
   });
-  document.getElementById('port-body').innerHTML=rows.map(({c,inv,avg,pa,val,pnl,pnlPct})=>{
-    const units=avg>0?inv/avg:0;
+  document.getElementById('port-body').innerHTML=rows.map(({c,inv,avg,pa,units,val,pnl,pnlPct})=>{
     const unitsLabel=units>0?(units<0.001?units.toFixed(6):units<1?units.toFixed(4):units.toFixed(4)):'—';
     return `
     <tr>
@@ -2231,7 +2299,7 @@ function renderPortafolio(){
   chartDist=new Chart(ctx2,{type:'doughnut',data:{labels:COINS.map(c=>c.name),datasets:[{data:rows.map(r=>+r.val.toFixed(2)),backgroundColor:COINS.map(c=>c.color),borderColor:'#0a0b0f',borderWidth:3,hoverBorderColor:'rgba(255,255,255,0.2)',hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'72%',plugins:{legend:{position:'right',labels:{font:{size:12},boxWidth:12,color:'#8b8f98',padding:14}},tooltip:{backgroundColor:'rgba(15,17,23,0.95)',borderColor:'rgba(255,255,255,0.1)',borderWidth:1,titleColor:'#e8eaed',bodyColor:'#8b8f98',padding:12,cornerRadius:8}}}});
 
   // VS BTC benchmark
-  const totalInvBtc=compras.reduce((a,c)=>a+c.monto,0);
+  const totalInvBtc=calcNetInvertido();
   const btcAvg=calcAvgEntry('btc');
   const btcCurrent=prices.btc?.usd||0;
   const btcValor=btcAvg>0&&btcCurrent>0?(totalInvBtc/btcAvg)*btcCurrent:totalInvBtc;
@@ -2261,12 +2329,12 @@ function updateSimulator(){
   const label=document.getElementById('sim-pct-label');
   label.textContent=(pct>=0?'+':'')+pct+'%';
   label.style.color=pct>0?'var(--green)':pct<0?'var(--red)':'var(--text)';
-  const totalInv=compras.reduce((a,c)=>a+c.monto,0);
-  const acum={};COINS.forEach(c=>{acum[c.key]=compras.reduce((a,cp)=>a+(cp.desglose[c.key]||0),0);});
+  const totalInv=calcNetInvertido();
+  const acum={};COINS.forEach(c=>{acum[c.key]=calcNetCoin(c.key);});
   let totalSim=0;
   const rows=COINS.map(c=>{
-    const inv=acum[c.key];const avg=calcAvgEntry(c.key);const pa=prices[c.key]?.usd||0;
-    const units=avg>0?inv/avg:0;const valActual=units*pa||inv;const valSim=valActual*(1+pct/100);
+    const inv=Math.max(0,acum[c.key]);const pa=prices[c.key]?.usd||0;
+    const units=calcNetUnits(c.key);const valActual=units>0&&pa>0?units*pa:inv;const valSim=valActual*(1+pct/100);
     totalSim+=valSim;return {c,inv,valActual,valSim,pnlSim:valSim-inv};
   });
   document.getElementById('sim-output').innerHTML=`
@@ -2293,7 +2361,7 @@ function updateSimulator(){
   `;
 }
 function renderProyeccion(){
-  const sem=compras.length;const avg=sem?compras.reduce((a,c)=>a+c.monto,0)/sem:0;
+  const bys=soloCompras();const sem=bys.length;const avg=sem?bys.reduce((a,c)=>a+c.monto,0)/sem:0;
   const proj1=avg*52;const proj2=avg*104;const proj3=avg*156;
   document.getElementById('proyeccion').innerHTML=`
     <div class="metric"><div class="metric-label">Ano 1 (52 sem)</div><div class="metric-val purple">${fmtS(proj1)}</div><div class="metric-sub">${fmtS(avg)}/sem promedio</div></div>
@@ -2304,7 +2372,7 @@ function renderProyeccion(){
 
 // ESTRATEGIA
 function renderEstrategia(){
-  const sem=compras.length;
+  const sem=soloCompras().length;
   const fases=[
     {num:'01',name:'Acumulacion',range:'Meses 1-12 · sem 1-52',r:[0,52]},
     {num:'02',name:'Consolidacion',range:'Meses 13-24 · sem 53-104',r:[52,104]},
@@ -2332,8 +2400,8 @@ function renderEstrategia(){
     <div class="prog-wrap"><div class="prog-bar" style="width:${disc}%;background:${disc>80?'var(--green)':disc>50?'var(--amber)':'var(--red)'};"></div></div>
     <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--text);margin-top:4px;">${Math.round(disc)}%</div>
   `;
-  const totalInv=compras.reduce((a,c)=>a+c.monto,0);const alerts=[];
-  COINS.forEach(c=>{const inv=compras.reduce((a,cp)=>a+(cp.desglose[c.key]||0),0);const realPct=totalInv>0?inv/totalInv*100:c.pct*100;const diff=realPct-c.pct*100;if(Math.abs(diff)>10)alerts.push({c,realPct,diff});});
+  const totalInv=calcNetInvertido();const alerts=[];
+  COINS.forEach(c=>{const inv=calcNetCoin(c.key);const realPct=totalInv>0?inv/totalInv*100:c.pct*100;const diff=realPct-c.pct*100;if(Math.abs(diff)>10)alerts.push({c,realPct,diff});});
   document.getElementById('rebalanceo-alerts').innerHTML=alerts.length?alerts.map(({c,realPct,diff})=>`
     <div class="alert alert-amber" style="margin-bottom:8px;">${c.name} representa ${realPct.toFixed(1)}% del portafolio (objetivo: ${Math.round(c.pct*100)}%). Desviacion de ${(diff>=0?'+':'')+diff.toFixed(1)}%.</div>
   `).join(''):`<p style="font-size:13px;color:var(--text2);">Portafolio balanceado. No se requieren ajustes.</p>`;
@@ -2343,7 +2411,7 @@ function renderGoals(){
   const el=document.getElementById('goals-list');if(!el)return;
   el.innerHTML=`<table class="tbl"><thead><tr><th>Moneda</th><th>P&L actual</th><th>Objetivo salida</th><th>Progreso</th></tr></thead><tbody>
   ${COINS.map(c=>{
-    const inv=compras.reduce((a,cp)=>a+(cp.desglose[c.key]||0),0);const avg=calcAvgEntry(c.key);const pa=prices[c.key]?.usd||0;
+    const inv=calcNetCoin(c.key);const avg=calcAvgEntry(c.key);const pa=prices[c.key]?.usd||0;
     const pnlPct=avg>0&&pa>0?(pa-avg)/avg*100:0;const g=goals[c.key]||null;
     return `<tr><td><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${c.color};margin-right:8px;"></span>${c.name}</td>
       <td style="font-family:'DM Mono',monospace;color:${pnlPct>=0?'var(--green)':'var(--red)'};">${pnlPct!==0?(pnlPct>=0?'+':'')+pnlPct.toFixed(1)+'%':'—'}</td>
@@ -2360,7 +2428,7 @@ function guardarGoal(){
 // REPORTES
 function renderReportes(){
   const byMonth={};
-  compras.forEach(c=>{const m=c.fecha.slice(0,7);if(!byMonth[m])byMonth[m]={total:0,sem:0,emociones:{}};byMonth[m].total+=c.monto;byMonth[m].sem++;if(c.emocion){byMonth[m].emociones[c.emocion]=(byMonth[m].emociones[c.emocion]||0)+1;}});
+  soloCompras().forEach(c=>{const m=c.fecha.slice(0,7);if(!byMonth[m])byMonth[m]={total:0,sem:0,emociones:{}};byMonth[m].total+=c.monto;byMonth[m].sem++;if(c.emocion){byMonth[m].emociones[c.emocion]=(byMonth[m].emociones[c.emocion]||0)+1;}});
   const months=Object.keys(byMonth).sort().reverse();
   document.getElementById('monthly-reports').innerHTML=months.length?months.map(m=>`
     <div class="report-card">
@@ -2374,7 +2442,7 @@ function renderReportes(){
     </div>
   `).join(''):'<div class="empty">Sin registros aun.</div>';
   const emotionStats={};
-  compras.forEach(c=>{if(!c.emocion)return;if(!emotionStats[c.emocion])emotionStats[c.emocion]={count:0,total:0};emotionStats[c.emocion].count++;emotionStats[c.emocion].total+=c.monto;});
+  soloCompras().forEach(c=>{if(!c.emocion)return;if(!emotionStats[c.emocion])emotionStats[c.emocion]={count:0,total:0};emotionStats[c.emocion].count++;emotionStats[c.emocion].total+=c.monto;});
   document.getElementById('emotion-log').innerHTML=Object.keys(emotionStats).length?`
     <table class="tbl"><thead><tr><th>Emocion</th><th>Veces</th><th>Capital en ese estado</th><th>Promedio por compra</th></tr></thead>
       <tbody>${Object.entries(emotionStats).sort((a,b)=>b[1].count-a[1].count).map(([e,s])=>`
@@ -2500,7 +2568,7 @@ function renderChartPnl() {
     y1: { position: 'right', ticks: { color: 'rgba(0,214,143,0.5)', font: { size: 10 }, callback: v => '$'+Math.round(v) }, grid: { display: false } }
   }}});
 }
-function calcAvgEntryUpTo(key, fecha) { let usd = 0, units = 0; compras.filter(c => c.fecha <= fecha).forEach(c => { const p = c.precios[key], m = c.desglose[key]||0; if (p > 0 && m > 0) { units += m/p; usd += m; } }); return units > 0 ? usd/units : 0; }
+function calcAvgEntryUpTo(key, fecha) { let usd = 0, units = 0; compras.filter(c => c.accion!=='venta' && c.fecha <= fecha).forEach(c => { const p = c.precios[key], m = c.desglose[key]||0; if (p > 0 && m > 0) { units += m/p; usd += m; } }); return units > 0 ? usd/units : 0; }
 
 function renderChartAvgVsCurrent() {
   const ctx = document.getElementById('chart-avg-vs-current')?.getContext('2d'); if (!ctx) return;
@@ -2539,10 +2607,10 @@ function renderHeatmap() {
 }
 
 function renderAdvancedStats() {
-  const el = document.getElementById('advanced-stats'); if (!el || !compras.length) return;
-  const montos = compras.map(c => c.monto); const avg = montos.reduce((a,b)=>a+b,0)/montos.length;
+  const el = document.getElementById('advanced-stats'); if (!el || !soloCompras().length) return;
+  const montos = soloCompras().map(c => c.monto); const avg = montos.reduce((a,b)=>a+b,0)/montos.length;
   const variance = montos.reduce((a,b)=>a+Math.pow(b-avg,2),0)/montos.length; const stdDev = Math.sqrt(variance); const cv = (stdDev/avg*100).toFixed(1);
-  const totalInv = compras.reduce((a,c)=>a+c.monto,0); const valorAct = calcValorActual(); const pnlPct = totalInv > 0 ? (valorAct-totalInv)/totalInv*100 : 0;
+  const totalInv = calcNetInvertido(); const valorAct = calcValorActual(); const pnlPct = totalInv > 0 ? (valorAct-totalInv)/totalInv*100 : 0;
   const maxLoss = parseFloat(localStorage.getItem('dca_max_loss')||'30');
   el.innerHTML = `
     <div class="metric"><div class="metric-label">Variabilidad aportes</div><div class="metric-val ${cv>50?'down':cv>25?'amber':''}">${cv}%</div><div class="metric-sub">CV — menor es mas consistente</div></div>
@@ -2554,7 +2622,7 @@ function renderAdvancedStats() {
 
 function renderCorrelacion() {
   const el = document.getElementById('correlacion-table'); if (!el) return;
-  const withPrices = compras.filter(c => COINS.some(coin => c.precios[coin.key] > 0));
+  const withPrices = soloCompras().filter(c => COINS.some(coin => c.precios[coin.key] > 0));
   if (withPrices.length < 3) { el.innerHTML = '<p style="font-size:13px;color:var(--text3);">Necesitas al menos 3 compras con precios registrados.</p>'; return; }
   const getPriceArr = (key) => withPrices.map(c => c.precios[key] || 0).filter(v => v > 0);
   const corr = (a, b) => { const n = Math.min(a.length, b.length); if (n < 2) return 0; const ax = a.slice(0,n), bx = b.slice(0,n); const ma = ax.reduce((s,v)=>s+v,0)/n, mb = bx.reduce((s,v)=>s+v,0)/n; const num = ax.reduce((s,v,i)=>s+(v-ma)*(bx[i]-mb),0); const den = Math.sqrt(ax.reduce((s,v)=>s+Math.pow(v-ma,2),0)*bx.reduce((s,v)=>s+Math.pow(v-mb,2),0)); return den ? +(num/den).toFixed(2) : 0; };
@@ -2584,7 +2652,7 @@ function calcImpuestos() {
   const country = document.getElementById('tax-country')?.value; const rates = { mx: 20, us: 15, custom: null };
   if (country !== 'custom') document.getElementById('tax-rate').value = rates[country];
   const rate = parseFloat(document.getElementById('tax-rate')?.value) || 20;
-  const totalInv = compras.reduce((a,c)=>a+c.monto,0); const valorAct = calcValorActual(); const ganancia = Math.max(0, valorAct - totalInv); const impuesto = ganancia * rate / 100;
+  const totalInv = calcNetInvertido(); const valorAct = calcValorActual(); const ganancia = Math.max(0, valorAct - totalInv); const impuesto = ganancia * rate / 100;
   const el = document.getElementById('tax-output'); if (!el) return;
   el.innerHTML = `<div class="metric-grid-3" style="margin-top:12px;">
     <div class="metric"><div class="metric-label">Ganancia realizable</div><div class="metric-val up">$${Math.round(ganancia).toLocaleString()}</div></div>
@@ -2595,7 +2663,7 @@ function calcImpuestos() {
 
 function guardarMaxLoss() { const v = parseFloat(document.getElementById('max-loss-input')?.value) || 30; localStorage.setItem('dca_max_loss', v); toast('Alerta de perdida guardada'); checkMaxLossAlert(); }
 function checkMaxLossAlert() {
-  const maxLoss = parseFloat(localStorage.getItem('dca_max_loss') || '30'); const totalInv = compras.reduce((a,c)=>a+c.monto,0); const valorAct = calcValorActual(); const pnlPct = totalInv > 0 ? (valorAct-totalInv)/totalInv*100 : 0;
+  const maxLoss = parseFloat(localStorage.getItem('dca_max_loss') || '30'); const totalInv = calcNetInvertido(); const valorAct = calcValorActual(); const pnlPct = totalInv > 0 ? (valorAct-totalInv)/totalInv*100 : 0;
   const el = document.getElementById('max-loss-status'); if (el) {
     if (pnlPct <= -maxLoss) el.innerHTML = `<div class="alert">Tu portafolio ha caido ${Math.abs(pnlPct).toFixed(1)}% — superaste tu limite de -${maxLoss}%. Revisa tu estrategia.</div>`;
     else el.innerHTML = `<p style="color:var(--green);font-size:13px;">Dentro del limite. P&L actual: ${pnlPct.toFixed(1)}% / Limite: -${maxLoss}%</p>`;
@@ -2643,7 +2711,7 @@ function renderPausas() {
 
 function renderWidgetPreview() {
   const el = document.getElementById('widget-preview'); const urlEl = document.getElementById('widget-url'); if (!el) return;
-  const totalInv = compras.reduce((a,c)=>a+c.monto,0); const valorAct = calcValorActual(); const pnl = valorAct - totalInv; const pnlPct = totalInv > 0 ? pnl/totalInv*100 : 0;
+  const totalInv = calcNetInvertido(); const valorAct = calcValorActual(); const pnl = valorAct - totalInv; const pnlPct = totalInv > 0 ? pnl/totalInv*100 : 0;
   el.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:var(--shadow-md);">
       <div style="font-size:10px;color:var(--teal);letter-spacing:0.08em;margin-bottom:8px;font-weight:600;">DCA · TRACKER</div>
@@ -2704,7 +2772,7 @@ async function loadAndRenderPrecio() {
     <div class="price-stat"><div class="price-stat-label">Cambio periodo</div><div class="price-stat-val" style="color:${change>=0?'var(--green)':'var(--red)'};">${change>=0?'+':''}${change.toFixed(2)}%</div></div>
   `;
   const now = Date.now(); const startTs = now - selectedPeriod * 86400000;
-  const misCompras = compras.filter(c => new Date(c.fecha).getTime() >= startTs);
+  const misCompras = soloCompras().filter(c => new Date(c.fecha).getTime() >= startTs);
   const buyPoints = misCompras.map(c => { const idx = data.findIndex(p => p.t >= new Date(c.fecha).getTime()); return { x: labels[idx >= 0 ? idx : 0], y: data[idx >= 0 ? idx : 0]?.v || 0 }; }).filter(p => p.y > 0);
   const ctx = document.getElementById('chart-precio')?.getContext('2d'); if (!ctx) return;
   if (chartPrecio) chartPrecio.destroy();
@@ -2779,7 +2847,7 @@ async function loadMarketData() {
 
 function renderMarketCycle() {
   const el = document.getElementById('market-cycle'); if (!el) return;
-  const totalInv = compras.reduce((a,c)=>a+c.monto,0); const valorAct = calcValorActual(); const pnlPct = totalInv > 0 ? (valorAct-totalInv)/totalInv*100 : 0;
+  const totalInv = calcNetInvertido(); const valorAct = calcValorActual(); const pnlPct = totalInv > 0 ? (valorAct-totalInv)/totalInv*100 : 0;
   let cycle, color, desc;
   if (pnlPct < -30) { cycle = 'Capitulacion'; color = 'var(--red)'; desc = 'Caida fuerte — historicamente buen momento para acumular con DCA'; }
   else if (pnlPct < 0) { cycle = 'Correccion'; color = 'var(--amber)'; desc = 'Mercado en correccion — manten el DCA, no vendas'; }
@@ -2854,8 +2922,8 @@ function calcRebalanceo() {
   const budget = parseFloat(document.getElementById('reb-budget')?.value)||0;
   const el = document.getElementById('rebalanceo-sugerido'); if (!el) return;
   if (!budget) { el.innerHTML = '<p style="font-size:13px;color:var(--text3);">Ingresa el presupuesto disponible.</p>'; return; }
-  const totalInv = compras.reduce((a,c)=>a+c.monto,0) + budget;
-  const acum = {}; COINS.forEach(c => { acum[c.key] = compras.reduce((a,cp)=>a+(cp.desglose[c.key]||0),0); });
+  const totalInv = calcNetInvertido() + budget;
+  const acum = {}; COINS.forEach(c => { acum[c.key] = calcNetCoin(c.key); });
   const suggestions = COINS.map(c => { const objetivo = totalInv * c.pct; const actual = acum[c.key]; return { c, sugerido: Math.max(0, objetivo - actual) }; });
   const totalSugerido = suggestions.reduce((a,s)=>a+s.sugerido,0); const factor = totalSugerido > 0 ? budget/totalSugerido : 0;
   el.innerHTML = `<table class="tbl"><thead><tr><th>Moneda</th><th>Peso objetivo</th><th>Actual</th><th>Comprar esta semana</th></tr></thead><tbody>
@@ -2867,8 +2935,8 @@ function calcRebalanceo() {
 }
 function renderMetricasAvanzadas() {
   const el = document.getElementById('metricas-avanzadas'); if (!el || !compras.length) return;
-  const totalInv = compras.reduce((a,c)=>a+c.monto,0); const valorAct = calcValorActual(); const pnl = valorAct - totalInv;
-  const pnlPct = totalInv>0?pnl/totalInv*100:0; const sem = compras.length; const years = sem/52;
+  const totalInv = calcNetInvertido(); const valorAct = calcValorActual(); const pnl = valorAct - totalInv;
+  const pnlPct = totalInv>0?pnl/totalInv*100:0; const sem = soloCompras().length; const years = sem/52;
   const cagr = years>0?((Math.pow(valorAct/Math.max(totalInv,1),1/Math.max(years,0.1))-1)*100):0;
   el.innerHTML = `<div class="metric-grid">
     <div class="metric"><div class="metric-label">CAGR</div><div class="metric-val ${cagr>=0?'up':'down'}">${(cagr>=0?'+':'')+cagr.toFixed(1)}%</div><div class="metric-sub">rendimiento anualizado</div></div>
@@ -2882,8 +2950,9 @@ function renderMetricasAvanzadas() {
 let histPage = 1; const HIST_PER_PAGE = 15; let histSearch = ''; let histSort = 'fecha'; let histSortDir = -1; let histFilter = '';
 function renderHistorialMejorado() {
   let data = [...compras];
-  if (histSearch) { const q = histSearch.toLowerCase(); data = data.filter(c => c.fecha.includes(q) || c.tipo.includes(q) || c.emocion.toLowerCase().includes(q) || c.nota.toLowerCase().includes(q)); }
-  if (histFilter) data = data.filter(c => c.tipo === histFilter);
+  if (histSearch) { const q = histSearch.toLowerCase(); data = data.filter(c => c.fecha.includes(q) || c.tipo.includes(q) || (c.emocion||'').toLowerCase().includes(q) || c.nota.toLowerCase().includes(q) || (c.accion||'compra').includes(q)); }
+  if (histFilter==='venta') data = data.filter(c => c.accion==='venta');
+  else if (histFilter) data = data.filter(c => c.accion!=='venta' && c.tipo === histFilter);
   data.sort((a,b) => { if (histSort === 'fecha') return histSortDir * (new Date(a.fecha)-new Date(b.fecha)); if (histSort === 'monto') return histSortDir * (a.monto-b.monto); return 0; });
   const total = data.length; const pages = Math.ceil(total/HIST_PER_PAGE); const slice = data.slice((histPage-1)*HIST_PER_PAGE, histPage*HIST_PER_PAGE);
   const c = document.getElementById('hist-container'); if (!c) return;
@@ -2896,20 +2965,23 @@ function renderHistorialMejorado() {
       <button class="sort-btn ${histFilter==='normal'?'active':''}" onclick="setHistFilter('normal')">Normal</button>
       <button class="sort-btn ${histFilter==='floja'?'active':''}" onclick="setHistFilter('floja')">Floja</button>
       <button class="sort-btn ${histFilter==='bono'?'active':''}" onclick="setHistFilter('bono')">Bono</button>
+      <button class="sort-btn ${histFilter==='venta'?'active':''}" onclick="setHistFilter('venta')" style="color:var(--red);">Ventas</button>
     </div>
     <div style="overflow-x:auto;"><table class="tbl"><thead><tr>
-      <th>Fecha</th><th>Monto</th><th>Tipo</th><th>Emocion</th><th>Desglose</th><th>Nota</th><th></th>
-    </tr></thead><tbody>${slice.map(cp=>`
-      <tr>
+      <th>Fecha</th><th>Tipo</th><th>Monto</th><th>Emocion</th><th>Desglose</th><th>Nota</th><th></th>
+    </tr></thead><tbody>${slice.map(cp=>{const esVenta=cp.accion==='venta';return `
+      <tr style="${esVenta?'background:var(--red-bg);border-left:3px solid var(--red);':''}">
         <td style="font-family:'DM Mono',monospace;">${cp.fecha}</td>
-        <td style="font-family:'DM Mono',monospace;">${fmt(cp.monto,'usd')}</td>
-        <td><span class="badge badge-${cp.tipo}">${cp.tipo}</span></td>
+        <td>${esVenta?'<span class="badge badge-venta">VENTA</span>':`<span class="badge badge-${cp.tipo}">${cp.tipo}</span>`}</td>
+        <td style="font-family:'DM Mono',monospace;${esVenta?'color:var(--red);':''}">
+          ${esVenta?'−':''}${fmt(cp.monto,'usd')}
+        </td>
         <td style="font-size:12px;color:var(--text2);">${cp.emocion||'—'}</td>
         <td><div class="coin-chips">${COINS.map(coin=>`<span class="chip">${coin.name.slice(0,4)} ${fmt(cp.desglose[coin.key]||0,'usd')}</span>`).join('')}</div></td>
         <td style="max-width:130px;font-size:12px;color:var(--text3);">${cp.nota||'—'}</td>
         <td><button class="btn btn-danger" onclick="eliminarCompra(${cp.id})">x</button></td>
       </tr>
-    `).join('')}</tbody></table></div>
+    `;}).join('')}</tbody></table></div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:8px;">
       <span style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;">${total} registros · Pagina ${histPage} de ${pages}</span>
       <div style="display:flex;gap:6px;">
@@ -2959,7 +3031,7 @@ function renderStocks() {
 
 function renderCombinedPortfolio() {
   const el = document.getElementById('combined-portfolio');
-  const cryptoInv = compras.reduce((a, c) => a + c.monto, 0); const cryptoVal = calcValorActual();
+  const cryptoInv = calcNetInvertido(); const cryptoVal = calcValorActual();
   const stocksInv = stocks.reduce((a, s) => a + s.qty * s.avgPrice, 0);
   const stocksVal = stocks.reduce((a, s) => { const pa = stockPrices[s.ticker] || 0; return a + (pa ? s.qty * pa : s.qty * s.avgPrice); }, 0);
   const totalInv = cryptoInv + stocksInv; const totalVal = cryptoVal + stocksVal; const pnl = totalVal - totalInv; const pnlPct = totalInv > 0 ? pnl / totalInv * 100 : 0;

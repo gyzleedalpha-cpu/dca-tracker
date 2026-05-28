@@ -1981,7 +1981,7 @@ async function cargarDatos(){
     compras=raw.map(r=>({
       id:r.id,fecha:r.fecha,monto:parseFloat(r.monto)||0,tipo:r.tipo,nota:r.nota||'',
       emocion:r.emocion||'',
-      accion:r.accion||'compra',
+      accion:r.tipo==='venta'?'venta':(r.accion||'compra'),
       precios:{hl:parseFloat(r.p_hl)||0,btc:parseFloat(r.p_btc)||0,sol:parseFloat(r.p_sol)||0,astr:parseFloat(r.p_astr)||0,eth:parseFloat(r.p_eth)||0},
       desglose:{hl:parseFloat(r.hl)||0,btc:parseFloat(r.btc)||0,sol:parseFloat(r.sol)||0,astr:parseFloat(r.astr)||0,eth:parseFloat(r.eth)||0}
     })).sort((a,b)=>b.id-a.id);
@@ -2205,7 +2205,7 @@ async function guardarCompra(){
   btn.disabled=true;document.getElementById('saving-ind').style.display='inline';
   setSS('syncing','Guardando...');
   const payload={
-    id:Date.now(),fecha,tipo,monto,nota,emocion:esVenta?'':selectedEmotion,
+    id:Date.now(),fecha,tipo:esVenta?'venta':tipo,monto,nota,emocion:esVenta?'':selectedEmotion,
     accion:currentAccion,
     hl:getVal('hl'),btc:getVal('btc'),
     sol:getVal('sol'),astr:getVal('astr'),eth:getVal('eth'),

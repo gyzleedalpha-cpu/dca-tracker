@@ -2214,6 +2214,7 @@ async function guardarCompra(){
     p_purr:parseFloat(document.getElementById('p-purr').value)||0,
   };
   try {
+    console.log('DEBUG: Payload enviado:', payload);
     await fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     toast(esVenta?'Venta registrada':'Compra guardada');resetForm();
     setTimeout(()=>cargarDatos(),1800);

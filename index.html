@@ -1874,7 +1874,7 @@ function toggleView(view) {
 
 // ============ CORE ============
 const API = 'https://script.google.com/macros/s/AKfycbwPsCw1rwjBJQuKa0xr-HZB82-b9uzkb0fP0NrRGv0cNhwhMAoTif-s8Q39Bbyu4iUA/exec';
-const GECKO = 'https://api.coingecko.com/api/v3/simple/price?ids=hyperliquid,bitcoin,solana,aster-2,ethereum&vs_currencies=usd,mxn';
+const GECKO = 'https://api.coingecko.com/api/v3/simple/price?ids=hyperliquid,bitcoin,solana,aster-2,ethereum,purr-2&vs_currencies=usd,mxn';
 
 const COINS = [
   {key:'hl',   name:'Hyperliquid', pct:0.35, color:'#8b5cf6', geckoId:'hyperliquid'},
@@ -1882,6 +1882,7 @@ const COINS = [
   {key:'sol',  name:'Solana',      pct:0.20, color:'#00d68f', geckoId:'solana'},
   {key:'astr', name:'ASTER',       pct:0.10, color:'#6b7280', geckoId:'aster-2'},
   {key:'eth',  name:'Ethereum',    pct:0.10, color:'#3b82f6', geckoId:'ethereum'},
+  {key:'purr', name:'PURR',        pct:0.00, color:'#f472b6', geckoId:'purr-2'},
 ];
 
 let compras=[], prices={}, fxRate=null, currency='usd';
@@ -1982,8 +1983,8 @@ async function cargarDatos(){
       id:r.id,fecha:r.fecha,monto:parseFloat(r.monto)||0,tipo:r.tipo,nota:r.nota||'',
       emocion:r.emocion||'',
       accion:r.tipo==='venta'?'venta':(r.accion||'compra'),
-      precios:{hl:parseFloat(r.p_hl)||0,btc:parseFloat(r.p_btc)||0,sol:parseFloat(r.p_sol)||0,astr:parseFloat(r.p_astr)||0,eth:parseFloat(r.p_eth)||0},
-      desglose:{hl:parseFloat(r.hl)||0,btc:parseFloat(r.btc)||0,sol:parseFloat(r.sol)||0,astr:parseFloat(r.astr)||0,eth:parseFloat(r.eth)||0}
+      precios:{hl:parseFloat(r.p_hl)||0,btc:parseFloat(r.p_btc)||0,sol:parseFloat(r.p_sol)||0,astr:parseFloat(r.p_astr)||0,eth:parseFloat(r.p_eth)||0,purr:parseFloat(r.p_purr)||0},
+      desglose:{hl:parseFloat(r.hl)||0,btc:parseFloat(r.btc)||0,sol:parseFloat(r.sol)||0,astr:parseFloat(r.astr)||0,eth:parseFloat(r.eth)||0,purr:parseFloat(r.purr)||0}
     })).sort((a,b)=>b.id-a.id);
     setSS('ok','Sincronizado');
     await cargarPrecios();
@@ -2208,12 +2209,13 @@ async function guardarCompra(){
     id:Date.now(),fecha,tipo:esVenta?'venta':tipo,monto,nota,emocion:esVenta?'':selectedEmotion,
     accion:currentAccion,
     hl:getVal('hl'),btc:getVal('btc'),
-    sol:getVal('sol'),astr:getVal('astr'),eth:getVal('eth'),
+    sol:getVal('sol'),astr:getVal('astr'),eth:getVal('eth'),purr:getVal('purr'),
     p_hl:parseFloat(document.getElementById('p-hl').value)||0,
     p_btc:parseFloat(document.getElementById('p-btc').value)||0,
     p_sol:parseFloat(document.getElementById('p-sol').value)||0,
     p_astr:parseFloat(document.getElementById('p-astr').value)||0,
     p_eth:parseFloat(document.getElementById('p-eth').value)||0,
+    p_purr:parseFloat(document.getElementById('p-purr').value)||0,
   };
   try {
     await fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -2247,8 +2249,8 @@ async function eliminarCompra(id){
 
 function exportarCSV(){
   if(!compras.length){toast('Sin datos','err');return;}
-  const rows=[['Fecha','Accion','Monto','Tipo','Emocion','HYPE','BTC','SOL','ASTR','ETH','P_HYPE','P_BTC','P_SOL','P_ASTR','P_ETH','Nota']];
-  compras.forEach(c=>rows.push([c.fecha,c.accion||'compra',c.monto,c.tipo,c.emocion,c.desglose.hl,c.desglose.btc,c.desglose.sol,c.desglose.astr,c.desglose.eth,c.precios.hl,c.precios.btc,c.precios.sol,c.precios.astr,c.precios.eth,c.nota||'']));
+  const rows=[['Fecha','Accion','Monto','Tipo','Emocion','HYPE','BTC','SOL','ASTR','ETH','PURR','P_HYPE','P_BTC','P_SOL','P_ASTR','P_ETH','P_PURR','Nota']];
+  compras.forEach(c=>rows.push([c.fecha,c.accion||'compra',c.monto,c.tipo,c.emocion,c.desglose.hl,c.desglose.btc,c.desglose.sol,c.desglose.astr,c.desglose.eth,c.desglose.purr||0,c.precios.hl,c.precios.btc,c.precios.sol,c.precios.astr,c.precios.eth,c.precios.purr||0,c.nota||'']));
   const a=document.createElement('a');
   a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(rows.map(r=>r.join(',')).join('\n'));
   a.download='dca_crypto.csv';a.click();toast('CSV descargado');
@@ -2460,7 +2462,7 @@ function activarNotificaciones(){
 function scheduleFriday(){const now=new Date(),nf=new Date(now);nf.setDate(now.getDate()+(5-now.getDay()+7)%7||7);nf.setHours(9,0,0,0);setTimeout(()=>{new Notification('DCA Tracker',{body:'Hoy es viernes — registra tu compra semanal.'});scheduleFriday();},nf-now);}
 
 // CONFIG
-const DEFAULT_PCTS = {hl:35,btc:25,sol:20,astr:10,eth:10};
+const DEFAULT_PCTS = {hl:35,btc:25,sol:20,astr:10,eth:10,purr:0};
 let configPcts = JSON.parse(localStorage.getItem('dca_config_pcts') || JSON.stringify(DEFAULT_PCTS));
 let configMeta = parseInt(localStorage.getItem('dca_meta') || '26000');
 let currentMode = 'auto';

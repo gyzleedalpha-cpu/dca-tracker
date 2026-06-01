@@ -2062,9 +2062,9 @@ function renderDashboard(){
   const semCount=sem;
   const avg=semCount?totalBruto/semCount:0;
   const valor=calcValorActual();
+  const vendidoTotal=calcTotalVendido();
+  const pnl=valor+vendidoTotal-totalBruto;
   const realized=calcRealizedPnL();
-  const unrealized=valor-totalNeto;
-  const pnl=unrealized+realized;
   const pnlPct=totalBruto>0?pnl/totalBruto*100:0;
   const total=totalNeto;
   const streak=calcStreak();
@@ -2095,17 +2095,13 @@ function renderDashboard(){
 
   if(new Date().getDay()===5)document.getElementById('friday-banner').style.display='flex';
 
-  const ventas=soloVentas();
-  if(ventas.length>0){
-    const vendidoTotal=calcTotalVendido();
-    document.getElementById('m-pnl').insertAdjacentHTML||0;
-    const rpEl=document.getElementById('realized-pnl-row');
-    if(rpEl)rpEl.innerHTML=`<span style="font-size:12px;color:var(--text3);">Realizado: <span style="color:${realized>=0?'var(--green)':'var(--red)'};">${(realized>=0?'+':'')+fmtS(realized)}</span> · Vendido: ${fmtS(vendidoTotal)}</span>`;
-  } else {
-    const rpEl=document.getElementById('realized-pnl-row');if(rpEl)rpEl.innerHTML='';
+  const rpEl=document.getElementById('realized-pnl-row');
+  if(rpEl){
+    if(vendidoTotal>0) rpEl.innerHTML=`<span style="font-size:12px;color:var(--text3);">Realizado: <span style="color:${realized>=0?'var(--green)':'var(--red)'};">${(realized>=0?'+':'')+fmtS(realized)}</span> · Vendido: ${fmtS(vendidoTotal)}</span>`;
+    else rpEl.innerHTML='';
   }
 
-  const acum={hl:0,btc:0,sol:0,astr:0,eth:0};
+  const acum={};
   COINS.forEach(coin=>{acum[coin.key]=calcNetCoin(coin.key);});
   const totalForPct=COINS.reduce((a,c)=>a+Math.max(0,acum[c.key]),0);
   document.getElementById('alloc-list').innerHTML=COINS.map(c=>{
@@ -2464,6 +2460,7 @@ function scheduleFriday(){const now=new Date(),nf=new Date(now);nf.setDate(now.g
 // CONFIG
 const DEFAULT_PCTS = {hl:35,btc:25,sol:20,astr:10,eth:10,purr:0};
 let configPcts = JSON.parse(localStorage.getItem('dca_config_pcts') || JSON.stringify(DEFAULT_PCTS));
+COINS.forEach(c=>{ if(configPcts[c.key]===undefined) configPcts[c.key]=DEFAULT_PCTS[c.key]||0; });
 let configMeta = parseInt(localStorage.getItem('dca_meta') || '26000');
 let currentMode = 'auto';
 function getCoinPct(key) { return (configPcts[key] || 0) / 100; }
